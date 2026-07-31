@@ -30,7 +30,10 @@ transaction(amount: UFix64, recipient: Address) {
     }
 
     post {
-        self.senderVault.balance >= 0.0: "Sender balance cannot be negative"
+        // State the invariant the body establishes. `balance >= 0.0` would be
+        // vacuous — UFix64 is unsigned, so that condition can never fail.
+        self.senderVault.balance == before(self.senderVault.balance) - amount:
+            "Sender balance did not decrease by \(amount)"
     }
 }
 ```
@@ -64,7 +67,8 @@ prepare(signer1: auth(BorrowValue) &Account, signer2: auth(BorrowValue) &Account
 ```cadence
 pre {
     amount > 0.0: "Amount must be positive: received \(amount)"
-    self.senderVault.balance >= amount: "Insufficient balance"
+    self.senderVault.balance >= amount:
+        "Insufficient balance: have \(self.senderVault.balance), need \(amount)"
 }
 ```
 
@@ -99,7 +103,7 @@ transaction(amount: UFix64) {
 
     prepare(signer: auth(BorrowValue) &Account) {
         self.vault = signer.storage.borrow<&{FungibleToken.Vault}>(from: /storage/vault)
-            ?? panic("Could not borrow vault")
+            ?? panic("Could not borrow FungibleToken Vault reference from /storage/vault")
         self.startBalance = self.vault.balance
     }
 }
@@ -150,10 +154,10 @@ transaction(amount: UFix64, to: Address) {
     prepare(signer: auth(BorrowValue) &Account) {
         self.senderVault = signer.storage
             .borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: /storage/vault)
-            ?? panic("Could not borrow vault")
+            ?? panic("Could not borrow FungibleToken Vault reference from /storage/vault")
         self.recipientReceiver = getAccount(to)
             .capabilities.borrow<&{FungibleToken.Receiver}>(/public/receiver)
-            ?? panic("Could not borrow receiver")
+            ?? panic("Could not borrow FungibleToken Receiver from /public/receiver for \(to)")
     }
     execute {
         let vault <- self.senderVault.withdraw(amount: amount)

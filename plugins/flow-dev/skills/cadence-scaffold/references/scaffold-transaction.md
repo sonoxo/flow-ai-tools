@@ -29,12 +29,15 @@ prepare → pre → execute → post
 - Handle resources in ALL code paths (moves, panics, conditionals)
 - Validate transfers: confirm vault balance is 0 before destruction
 - Handle resources before any panic-prone operations (Cadence does NOT have `defer`)
-- Always nil-check capability borrows
+- Bind every capability borrow with `?? panic("...")` — never force-unwrap
+- Borrow once and work through the binding: checking one resolution and using another
+  is a hole, because the value behind a path can be replaced in between
 
 ### General
 - Accept addresses as parameters — never hardcode
 - Use string-based imports: `import "ContractName"`
-- Descriptive panic messages with interpolated values
+- Descriptive panic messages with interpolated values, built with string templates
+  (`"\(value)"`) rather than `.concat`
 
 ## Transaction Template
 

@@ -96,7 +96,7 @@ Test.expect(result, Test.beSucceeded())
 
 A transaction whose `prepare` block declares two parameters needs two entries in `authorizers` (in order) and the matching `TestAccount` values in `signers`. Multi-authorizer transactions are uncommon outside of escrow and atomic-swap patterns, but when they appear the symmetry between the two lists is what the framework checks — a length mismatch fails the transaction with an authorisation error before any contract code runs.
 
-`Test.executeTransaction` submits the transaction, commits a block, and returns a `TransactionResult` that behaves the same as a `ScriptResult` for assertion purposes: `Test.beSucceeded`, `Test.beFailed`, and `result.error!.message` all work identically. Events emitted by the transaction become visible via `Test.events` and `Test.eventsOfType` after the call returns, and any `log` statements the transaction or its callees executed surface in `Test.logs`.
+`Test.executeTransaction` submits the transaction, commits a block, and returns a `TransactionResult` that behaves the same as a `ScriptResult` for assertion purposes: `Test.beSucceeded`, `Test.beFailed`, and the bound `result.error` all work identically. Events emitted by the transaction become visible via `Test.events` and `Test.eventsOfType` after the call returns, and any `log` statements the transaction or its callees executed surface in `Test.logs`.
 
 Argument values in the `arguments` array must match the transaction's declared parameter types exactly. Cadence does not coerce between numeric widths, so a transaction expecting a `UInt64` rejects a plain `42` (which the parser infers as `Int`). Cast at the call site — `42 as UInt64` — to keep type errors at the test boundary instead of hidden inside the transaction prelude.
 
@@ -158,8 +158,11 @@ The snapshot-per-test pattern composes well with `Test.expectFailure` and revert
 ## Time Manipulation
 
 ```cadence
-// Advance one day.
-Test.moveTime(by: 86400.0)
+// Name the interval rather than writing 86400.0 at each call site — the
+// argument is in seconds, and "one day" is the thing the test actually means.
+access(all) let oneDay: Fix64 = 86400.0
+
+Test.moveTime(by: oneDay)
 // Optionally commit a block so getCurrentBlock().height advances too.
 Test.commitBlock()
 ```

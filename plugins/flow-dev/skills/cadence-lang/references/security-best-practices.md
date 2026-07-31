@@ -1,5 +1,9 @@
 # Cadence Security Best Practices
 
+Protocol-specific rules for contracts that price assets or gate a live market —
+oracle sourcing, foreign-contract assumptions, and emergency stops —
+live in the `flow-defi` skill's `protocol-safety.md`.
+
 ## Access Control
 
 ### Practice 1: Default to Private
@@ -18,8 +22,81 @@ access(Admin) fun performAdminAction() {
 }
 ```
 
+Widening is a promise that is hard to take back:
+a contract update can add access, while removing it breaks every caller that had it.
+This applies to fields as much as functions.
+A public `var` field reads as a public write surface even though Cadence forbids the write —
+a field is assignable only inside the type that declares it —
+so prefer `access(self) var` plus a `view` accessor,
+which puts the read path in public and leaves the write path internal by construction.
+
 ### Practice 3: Use Entitlements for Privileged Operations
 Never use `access(all)` for state-modifying or privileged operations.
+
+Authority in Cadence is a reference you hold, not an address you check.
+A privileged operation belongs on a resource whose method is entitled,
+so that holding a plain reference to that resource grants nothing:
+
+```cadence
+access(all) entitlement Update
+
+access(all)
+resource Updater {
+
+    access(Update)
+    fun update(price: UFix64) {
+        // ...
+    }
+}
+```
+
+An accidentally published `Capability<&Updater>` is then inert,
+where an `access(all) fun update` would have made it a public write path.
+
+Two rules of the model that are easy to get wrong:
+
+- **Owning a value bypasses entitlements entirely.**
+  Entitlements gate access *through references*.
+  Whoever owns the struct or resource can call every method on it regardless.
+  So never hand out ownership of a resource whose methods are the authority — hand out a
+  reference with exactly the entitlements the holder needs.
+- **Fields can only be assigned inside the type that declares them.**
+  `item.gated = 1` is a compile error from outside `item`'s own declaration,
+  whatever the field's access modifier and whether or not the value is owned.
+  Mutation therefore always goes through a method,
+  which is the thing that can be entitled — design the method, not the field.
+
+### Practice 3b: A Struct Proves Nothing — Anyone Can Construct One
+
+A struct passed as an argument is not evidence of anything:
+its initializer is callable by any code that can name the type,
+so a `struct OperatorProof { let operator: Address }` is forgeable by definition.
+
+```cadence
+// ❌ Anyone can build a `proof` naming any address
+access(all)
+fun mint(proof: OperatorProof, amount: UFix128) { }
+
+// ✅ The authority is the entitled reference the caller had to obtain
+access(Mint)
+fun mint(amount: UFix128) { }
+```
+
+Where a struct is something *the contract reports* rather than something a caller may
+manufacture, restrict its initializer with `access(contract) view init`.
+Then the struct in hand really did come from the contract that vouches for it.
+
+### Practice 3c: Enforce Least Authority Across Component Boundaries
+
+Each contract, resource, and transaction should hold the narrowest authority
+that lets it do its job, and no more:
+a reference with one entitlement rather than a resource,
+one capability rather than an account reference,
+a read view rather than a mutable reference.
+
+Where a contract function would need `auth(AddContract)` or similar,
+leave that call in the transaction, where the account access already lives,
+and keep in the contract only the part worth centralizing and testing.
 
 ## Capability Security
 
@@ -142,7 +219,7 @@ fun process(vault: @{FungibleToken.Vault}) {
     let balance = vault.balance
     if balance != 0.0 {
         destroy vault
-        panic("Transfer incomplete: balance is ".concat(balance.toString()))
+        panic("process: transfer incomplete, balance is \(balance)")
     }
     doWork()
     destroy vault
@@ -165,6 +242,122 @@ access(all) event TokensWithdrawn(amount: UFix64, from: Address?)
 access(all) event TokensDeposited(amount: UFix64, to: Address?)
 ```
 
+## State Changes and Foreign Calls
+
+### Practice 21: Follow Checks — Effects — Interactions
+
+Order every state-changing function: validate, then update your own state,
+then call out to anything you do not own.
+A call into foreign code — depositing to a `Receiver`, withdrawing through a `Provider`,
+minting or burning through an interface someone else implements — can re-enter your contract,
+and it must find your state already consistent when it does.
+Resolving a capability with `borrow` runs no foreign code,
+which is why it belongs with the checks rather than with the interactions.
+
+```cadence
+access(all)
+fun payOut(
+    amount: UFix64,
+    from: auth(FungibleToken.Withdraw) &{FungibleToken.Provider},
+    to: Capability<&{FungibleToken.Receiver}>
+) {
+    // 1. checks
+    pre {
+        !self.paused:
+            "Payouts.payOut: payouts are paused"
+        amount > 0.0:
+            "Payouts.payOut: amount must be positive, got \(amount)"
+    }
+    let receiver = to.borrow()
+        ?? panic("Payouts.payOut: receiver capability does not resolve")
+
+    // 2. effects — our own accounting is settled before foreign code runs
+    self.totalOut = self.totalOut + amount
+
+    // 3. interactions — the call that hands over control comes last
+    let payment <- from.withdraw(amount: amount)
+    receiver.deposit(from: <-payment)
+}
+```
+
+Cadence has no `defer`, so there is no "clean up afterwards" to fall back on:
+if the interaction aborts, the whole transaction reverts,
+and anything you were relying on running after it simply does not exist as a construct.
+Get the ordering right instead.
+
+### Practice 22: Check and Use the Same Value
+
+Storage references and capabilities behave like symbolic links:
+resolving the same path twice can yield two different values,
+because the stored value can be replaced in between.
+Anything you check and then use must be the *same* resolution —
+borrow once, bind it, and work through that binding.
+
+```cadence
+// ❌ Two resolutions: the check and the withdrawal may see different vaults
+if signer.storage.borrow<&{FungibleToken.Vault}>(from: path)!.balance >= amount {
+    // ... code in between, which may run foreign code that swaps the stored value
+    let vault = signer.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: path)!
+    let payment <- vault.withdraw(amount: amount)
+    // ...
+}
+
+// ✅ One resolution, bound and reused
+let vault = signer.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: path)
+    ?? panic("settle: no vault at \(path)")
+assert(
+    vault.balance >= amount,
+    message: "settle: balance \(vault.balance) below \(amount)"
+)
+let payment <- vault.withdraw(amount: amount)
+```
+
+`signer` here is a transaction's `auth(BorrowValue) &Account`:
+storage access needs an authorized account reference,
+which is why this code belongs in a `prepare` block rather than in a contract function.
+
+The same applies to a `Capability` argument:
+`cap.check()` followed by a later `cap.borrow()` is two resolutions.
+Borrow once and validate what you got.
+
+### Practice 23: Never Make Arbitrary Calls From User Input
+
+Do not resolve a caller-supplied address, path, or capability into a call target
+in a function that holds authority — that turns your contract's authority into the caller's.
+Where a capability must come from the caller, constrain its type,
+borrow it once, and do nothing with it but the one narrow operation it is there for.
+
+## Input Validation and Availability
+
+### Practice 24: Validate Every Input at the Trust Boundary
+
+Treat every argument that originates off-chain or from another account as hostile:
+amounts (zero, negative, absurdly large), identifiers (unknown, already settled),
+strings that become paths or identifiers, capabilities that do not resolve,
+timestamps that run backwards.
+Validate once, where the value enters, and then pass the validated value inward
+rather than re-checking it at every level.
+
+A string that will become a storage path or a contract name is the case most often missed:
+`StoragePath(identifier:)` itself validates nothing,
+so constrain the string at the boundary with a `view` predicate the whole contract shares.
+
+### Practice 25: Keep Failure Paths Cheap and Loops Bounded
+
+A transaction that can be made to run out of computation is a denial of service
+against every user of the path it sits on.
+Iterate over caller-supplied collections only with a bound you enforce,
+and never make one user's operation walk a structure that another user can grow —
+per-account state that grows without limit eventually makes its own owner's
+transactions unexecutable.
+Where an unbounded set must be processed, make it paginated or caller-chunked,
+so the work per transaction stays bounded.
+
+The same reasoning applies to abort conditions:
+an `assert` that a hostile caller can trigger in a shared path
+(a pooled settlement, a batch update) turns one bad entry into a stall for everyone.
+Skip and record the bad entry there instead of aborting the batch.
+
 ## Security Checklist
 
 - [ ] All fields use `access(self)` or `access(contract)` by default
@@ -176,3 +369,8 @@ access(all) event TokensDeposited(amount: UFix64, to: Address?)
 - [ ] Types are as specific as possible
 - [ ] User storage not trusted without validation
 - [ ] Events emitted for significant actions
+- [ ] State-changing functions ordered checks → effects → interactions
+- [ ] Every check and its use share one `borrow` — no path resolved twice
+- [ ] No call target derived from caller-supplied addresses, paths, or capabilities
+- [ ] Inputs validated once, at the boundary where they enter
+- [ ] Caller-supplied collections iterated only under an enforced bound

@@ -23,7 +23,8 @@ Identify the required flow:
 3. **Accept addresses as parameters** — never hardcode
 4. **Zapper token ordering**: source token MUST be token0; reverse if `source.getSourceType() != token0Type`
 5. **Validate vault empty** (`balance == 0.0`) before destruction
-6. **Nil-check** all borrowed capabilities
+6. **Bind every borrowed capability** with `?? panic("...")` — never force-unwrap, and never
+   check with one resolution and use another
 7. **Single uniqueID** across all composed connectors
 
 ## Transaction Physical Order
@@ -98,7 +99,10 @@ transaction(pid: UInt64) {
         // Size withdrawal by sink capacity
         let vault <- self.swapSource.withdrawAvailable(maxAmount: self.poolSink.minimumCapacity())
         self.poolSink.depositCapacity(from: &vault as auth(FungibleToken.Withdraw) &{FungibleToken.Vault})
-        assert(vault.balance == 0.0, message: "Residual after deposit")
+        assert(
+            vault.balance == 0.0,
+            message: "restake: \(vault.balance) left in the vault after depositing to the pool sink"
+        )
         destroy vault
     }
 

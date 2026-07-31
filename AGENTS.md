@@ -51,7 +51,7 @@ It contains exactly these eleven skills (each has its own `SKILL.md` plus a `ref
 
 | Skill | Reference count |
 |---|---|
-| `cadence-lang` | 14 |
+| `cadence-lang` | 18 |
 | `cadence-tokens` | 3 |
 | `cadence-audit` | 2 |
 | `cadence-scaffold` | 3 |
@@ -60,7 +60,7 @@ It contains exactly these eleven skills (each has its own `SKILL.md` plus a `ref
 | `flow-project-setup` | 2 |
 | `flow-cli` | 5 |
 | `flow-dev-setup` | 8 |
-| `flow-defi` | 4 |
+| `flow-defi` | 5 |
 | `flow-tokenomics` | 5 |
 
 Descriptions and trigger phrases live in each `SKILL.md` frontmatter.
@@ -78,7 +78,7 @@ When a developer asks for help, use this table to determine which skill(s) to ac
 | Build React frontend on Flow | `flow-react-sdk` | |
 | Set up a Flow project, configure flow.json, deploy | `flow-project-setup` | |
 | Install dev tools (Flow CLI, emulator, VS Code, EVM tooling) | `flow-dev-setup` | `flow-project-setup` |
-| Design or architect a DeFi protocol on Flow | `flow-defi` | |
+| Design or architect a DeFi protocol on Flow | `flow-defi` | `cadence-lang` |
 | Design token economics for a Flow protocol | `flow-tokenomics` | `flow-defi`, `cadence-tokens` |
 | Write unit tests for Cadence contracts | `cadence-testing` | `cadence-lang` |
 | Debug failing Cadence tests / add coverage | `cadence-testing` | `cadence-lang`, `cadence-audit` |

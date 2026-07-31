@@ -6,6 +6,11 @@ Conditions enforce contracts between callers and implementations. Both cause com
 
 Validate inputs and preconditions before execution. Evaluated **before** function body.
 
+A `pre` block is the function's contract with its callers, and it fails before any state changes.
+Put parameter validation there rather than in the body:
+it reads as part of the signature rather than as the first few lines of logic,
+and it cannot be reordered after a state change by a later edit.
+
 ```cadence
 access(all) fun transfer(amount: UFix64, to: Address) {
     pre {
@@ -20,6 +25,13 @@ access(all) fun transfer(amount: UFix64, to: Address) {
 ## Post-Conditions
 
 Validate results and state changes after execution.
+
+A `post` block states what the function guarantees.
+Use it for the invariant the body is supposed to establish —
+the thing a future edit could break without breaking any test.
+Post-conditions are not a place to compute anything:
+they must be side-effect-free, and a condition that restates the last line of the body
+buys nothing. State the property, not the implementation.
 
 ### The `result` Constant
 ```cadence
@@ -125,10 +137,14 @@ access(all) resource MyVault: Vault {
 ## Best Practices
 
 ### Descriptive Error Messages
+
+Prefix the message with `Type.function:` and say what was wrong *and* what was expected.
+The message is read by someone holding a failed transaction and nothing else.
+
 ```cadence
 // ✅ Clear
-pre { amount > 0.0: "Transfer amount must be greater than zero" }
-pre { amount <= self.balance: "Insufficient balance: have \(self.balance), need \(amount)" }
+pre { amount > 0.0: "Vault.transfer: amount must be greater than zero, got \(amount)" }
+pre { amount <= self.balance: "Vault.transfer: insufficient balance: have \(self.balance), need \(amount)" }
 
 // ❌ Vague
 pre { amount > 0.0: "Invalid amount" }

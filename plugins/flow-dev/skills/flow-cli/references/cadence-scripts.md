@@ -31,13 +31,11 @@ import "FlowToken"
 access(all) fun main(addresses: [Address]): {Address: UFix64} {
     let balances: {Address: UFix64} = {}
     for address in addresses {
-        let account = getAccount(address)
-        if let vaultRef = account.capabilities
-            .borrow<&{FungibleToken.Balance}>(/public/flowTokenBalance) {
-            balances[address] = vaultRef.balance
-        } else {
-            balances[address] = 0.0
-        }
+        // An account with no balance capability reports 0.0 rather than
+        // aborting the whole query for every other address in the batch.
+        balances[address] = getAccount(address).capabilities
+            .borrow<&{FungibleToken.Balance}>(/public/flowTokenBalance)?.balance
+            ?? 0.0
     }
     return balances
 }
@@ -69,20 +67,44 @@ access(all) fun main(address: Address, publicPath: PublicPath): Bool {
 
 ### Get Account Keys
 ```cadence
-access(all) fun main(address: Address): [{String: AnyStruct}] {
+/// One account key, typed so the caller decodes rather than guesses.
+access(all) struct AccountKeyRecord {
+    access(all) let index: Int
+    access(all) let weight: UFix64
+    access(all) let hashAlgorithm: UInt8
+    access(all) let signatureAlgorithm: UInt8
+    access(all) let isRevoked: Bool
+
+    view init(
+        index: Int,
+        weight: UFix64,
+        hashAlgorithm: UInt8,
+        signatureAlgorithm: UInt8,
+        isRevoked: Bool
+    ) {
+        self.index = index
+        self.weight = weight
+        self.hashAlgorithm = hashAlgorithm
+        self.signatureAlgorithm = signatureAlgorithm
+        self.isRevoked = isRevoked
+    }
+}
+
+access(all) fun main(address: Address): [AccountKeyRecord] {
     let account = getAccount(address)
-    var keys: [{String: AnyStruct}] = []
-    var i = 0
+    let keys: [AccountKeyRecord] = []
+    var index = 0
+    // `keys.get` returns nil past the last index, which is the only end marker available.
     while true {
-        if let key = account.keys.get(keyIndex: i) {
-            keys.append({
-                "index": i,
-                "weight": key.weight,
-                "hashAlgorithm": key.hashAlgorithm.rawValue,
-                "signatureAlgorithm": key.signatureAlgorithm.rawValue,
-                "isRevoked": key.isRevoked
-            })
-            i = i + 1
+        if let key = account.keys.get(keyIndex: index) {
+            keys.append(AccountKeyRecord(
+                index: index,
+                weight: key.weight,
+                hashAlgorithm: key.hashAlgorithm.rawValue,
+                signatureAlgorithm: key.signatureAlgorithm.rawValue,
+                isRevoked: key.isRevoked
+            ))
+            index = index + 1
         } else {
             break
         }
@@ -102,15 +124,27 @@ access(all) fun main(address: Address): [String] {
 ```cadence
 import "FlowStorageFees"
 
-access(all) fun main(address: Address): {String: UFix64} {
-    let account = getAccount(address)
-    let used = account.storage.used
-    let capacity = account.storage.capacity
-    return {
-        "used": UFix64(used),
-        "capacity": UFix64(capacity),
-        "available": UFix64(capacity) - UFix64(used)
+/// Storage usage in bytes, with `available` derived once so callers cannot disagree on it.
+access(all) struct StorageReport {
+    access(all) let used: UInt64
+    access(all) let capacity: UInt64
+    access(all) let available: UInt64
+
+    view init(used: UInt64, capacity: UInt64) {
+        self.used = used
+        self.capacity = capacity
+        // Subtraction is checked and these are unsigned, so an over-capacity
+        // account would abort the script rather than report a negative figure.
+        self.available = capacity > used ? capacity - used : 0
     }
+}
+
+access(all) fun main(address: Address): StorageReport {
+    let account = getAccount(address)
+    return StorageReport(
+        used: account.storage.used,
+        capacity: account.storage.capacity
+    )
 }
 ```
 
@@ -138,13 +172,25 @@ access(all) fun main(epochCounter: UInt64): FlowEpoch.EpochMetadata? {
 
 ### Get Current Block Info
 ```cadence
-access(all) fun main(): {String: AnyStruct} {
-    let block = getCurrentBlock()
-    return {
-        "height": block.height,
-        "id": block.id,
-        "timestamp": block.timestamp
+access(all) struct BlockInfo {
+    access(all) let height: UInt64
+    access(all) let id: [UInt8; 32]
+    access(all) let timestamp: UFix64
+
+    view init(height: UInt64, id: [UInt8; 32], timestamp: UFix64) {
+        self.height = height
+        self.id = id
+        self.timestamp = timestamp
     }
+}
+
+access(all) fun main(): BlockInfo {
+    let block = getCurrentBlock()
+    return BlockInfo(
+        height: block.height,
+        id: block.id,
+        timestamp: block.timestamp
+    )
 }
 ```
 
@@ -252,8 +298,9 @@ access(all) fun main(
     let account = getAccount(address)
     let collection = account.capabilities
         .borrow<&{NonFungibleToken.Collection}>(collectionPublicPath)
-        ?? panic("Could not borrow collection")
-    let nft = collection.borrowNFT(nftID) ?? panic("NFT \(nftID) not found")
+        ?? panic("Could not borrow NFT collection from \(address) at \(collectionPublicPath)")
+    let nft = collection.borrowNFT(nftID)
+        ?? panic("NFT \(nftID) not found in collection at \(collectionPublicPath)")
     return nft.resolveView(Type<MetadataViews.Display>()) as? MetadataViews.Display
 }
 ```

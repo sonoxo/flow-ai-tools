@@ -17,16 +17,22 @@ Before generating, ask for:
 - Admin singleton created in `init()` only
 - Borrow references instead of load/save cycles
 - Existence checks before storage writes
-- Entitlements for all privileged operations
+- Entitlements for all privileged operations, including the admin resource's own methods —
+  owning a resource bypasses entitlements, but a leaked *reference* to one does not
+- Entitlement names must not collide with type names in the same contract
 - No `auth(...) &Account` parameters in contract functions
 - No public admin resource creation
 - No capability-typed public fields
+- Never force-unwrap; bind optionals or `?? panic("Type.function: what was expected")`
+- String templates (`"\(value)"`) for every message, never `.concat`
 
 ## Contract Structure Template
 
 ```cadence
 import "FungibleToken"  // Only import what you need
 
+/// One sentence on what the contract is for, followed by what it deliberately
+/// does not do and which alternatives were rejected. This comment carries the design.
 access(all) contract <Name> {
 
     // ── Events ──
@@ -39,10 +45,13 @@ access(all) contract <Name> {
     // ── Paths (access(all) constants) ──
     access(all) let StoragePath: StoragePath
     access(all) let PublicPath: PublicPath
+    access(all) let AdminStoragePath: StoragePath
 
     // ── Entitlements ──
-    entitlement Admin
-    entitlement Withdraw
+    // Name entitlements after the operation they gate, never after the resource
+    // that holds them: an entitlement and a resource cannot share an identifier.
+    access(all) entitlement Update
+    access(all) entitlement Create
 
     // ── Resource Interfaces ──
     access(all) resource interface PublicInterface {
@@ -57,7 +66,7 @@ access(all) contract <Name> {
             return self.data
         }
 
-        access(Admin) fun updateData(newData: String) {
+        access(Update) fun updateData(newData: String) {
             self.data = newData
         }
 
@@ -67,9 +76,12 @@ access(all) contract <Name> {
     }
 
     // ── Admin Resource (singleton) ──
-    access(all) resource Admin {
-        access(all) fun createResource(data: String): @MyResource {
+    access(all) resource Administrator {
+        /// Entitled rather than `access(all)`, so an accidentally published
+        /// `Capability<&Administrator>` grants nothing.
+        access(Create) fun createResource(data: String): @MyResource {
             <Name>.totalSupply = <Name>.totalSupply + 1
+            emit <ActionPerformed>(param: <Name>.totalSupply)
             return <- create MyResource(data: data)
         }
     }
@@ -84,10 +96,11 @@ access(all) contract <Name> {
         self.totalSupply = 0
         self.StoragePath = /storage/<name>Storage
         self.PublicPath = /public/<name>Public
+        self.AdminStoragePath = /storage/<name>Admin
 
         // Create admin singleton
-        let admin <- create Admin()
-        self.account.storage.save(<-admin, to: /storage/<name>Admin)
+        let admin <- create Administrator()
+        self.account.storage.save(<-admin, to: self.AdminStoragePath)
 
         emit ContractInitialized()
     }

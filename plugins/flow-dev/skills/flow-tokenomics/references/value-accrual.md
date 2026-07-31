@@ -29,9 +29,13 @@ Direct distribution of protocol fees to token stakers in non-native (non-reflexi
 access(all) contract ProtocolFees {
     access(contract) var pendingDistribution: UFix64
 
+    // The split is the protocol's economic policy — name it, so a change to the
+    // number is a change to a reviewable field rather than to an expression.
+    access(all) let stakerFeeShare: UFix64   // set in init(), e.g. 0.30
+
     // Called on each protocol interaction
     access(contract) fun collectFee(amount: UFix64) {
-        let stakerShare = amount * 0.30
+        let stakerShare = amount * ProtocolFees.stakerFeeShare
         let lpShare = amount - stakerShare
         self.pendingDistribution = self.pendingDistribution + stakerShare
         // route lpShare to liquidity providers

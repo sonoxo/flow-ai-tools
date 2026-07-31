@@ -85,7 +85,7 @@ fun process(vault: @{FungibleToken.Vault}) {
     let balance = vault.balance
     if balance != 0.0 {
         destroy vault
-        panic("Transfer incomplete: balance is ".concat(balance.toString()))
+        panic("process: transfer incomplete, balance is \(balance)")
     }
     doWork()
     destroy vault
@@ -100,7 +100,7 @@ Parent destruction automatically destroys nested resources.
 ### Dictionary Operations
 ```cadence
 access(all) resource NFTCollection {
-    access(self) var nfts: @{UInt64: NFT}
+    access(self) let nfts: @{UInt64: NFT}
 
     access(all) fun deposit(nft: @NFT) {
         let id = nft.id
@@ -110,7 +110,7 @@ access(all) resource NFTCollection {
 
     access(Withdraw) fun withdraw(id: UInt64): @NFT {
         let nft <- self.nfts.remove(key: id)
-            ?? panic("NFT with ID \(id) not found in collection")
+            ?? panic("NFTCollection.withdraw: NFT with ID \(id) not found in collection")
         return <-nft
     }
 
