@@ -4,6 +4,10 @@ Generated Cadence code should be documented, especially when it introduces new c
 
 ## What Must Be Documented
 
+- Every contract, type, interface, function, event, and field gets a `///` doc comment.
+  The contract-level comment carries the most weight:
+  it is where the design lives — what the contract is for,
+  what it deliberately does not do, and which alternatives were rejected and why.
 - Add doc comments to contracts, resources, structs, resource interfaces, struct interfaces, fields, functions, and events when they are part of the design a reader needs to understand.
 - Doc comments may use `///` line comments or `/** ... */` block comments. Prefer `///` for generated code unless there is a clear reason to use block comments.
 - Add doc comments to callable functions, especially public or entitled functions that other code or users are expected to call.
@@ -14,6 +18,47 @@ Generated Cadence code should be documented, especially when it introduces new c
 - Cadence doc comments support Markdown. Use standard Markdown formatting when it improves readability.
 - Use inline code, emphasis, and bullet lists where they improve readability.
 - Keep Markdown simple so generated documentation remains structured and readable.
+
+## Document In Place
+
+Never replace a comment with a pointer to another one ("see `Market.poke`");
+the reader is here, not there.
+Repeat the explanation where it is needed —
+a comment that sends the reader elsewhere costs more than the duplication saves.
+
+## Comment The Why, Not The What
+
+The code already says what it does.
+A comment earns its line by saying something the code cannot:
+why this bound, why this order, what breaks if it changes,
+what was tried and rejected.
+
+```cadence
+// ❌ Restates the line
+// Add the shares to the pool.
+pool.absorb(shares: shares)
+
+// ✅ Says what the code cannot
+// Absorb before the price is read: the reader's price must include these shares,
+// or the position is valued against a pool it is already part of.
+pool.absorb(shares: shares)
+```
+
+A comment that restates the line is worse than no comment —
+it is a second thing to keep true.
+
+At a component boundary, name the threat zone in the doc comment:
+who can call this, what they are trusted with,
+and what happens if their key is compromised.
+If the answer is "everything", the boundary is in the wrong place.
+
+## Leave No Debug Code, TODOs, Or Commented-Out Logic
+
+No `log` calls left in for debugging, no `TODO`, no disabled branches kept "for reference"
+on any path that runs in production.
+Commented-out logic is unreviewable and untested,
+and it reads as an intention rather than a decision.
+If the work is real, it belongs in an issue; if it is not, delete it.
 
 ## How To Write Doc Comments
 

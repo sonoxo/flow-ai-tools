@@ -111,9 +111,10 @@ access(all) fun testNonOwnerCannotPause() {
     )
     let result = Test.executeTransaction(tx)
     Test.expect(result, Test.beFailed())
+    let error = result.error ?? panic("testNonOwnerCannotPause: expected a failure, got success")
     Test.assert(
-        result.error!.message.contains("admin entitlement required"),
-        message: "unexpected error: ".concat(result.error!.message)
+        error.message.contains("admin entitlement required"),
+        message: "unexpected error: \(error.message)"
     )
 }
 ```
@@ -142,9 +143,10 @@ access(all) fun testWithdrawRejectsZeroAmount() {
     )
     let result = Test.executeTransaction(tx)
     Test.expect(result, Test.beFailed())
+    let error = result.error ?? panic("testWithdrawRejectsZeroAmount: expected a failure, got success")
     Test.assert(
-        result.error!.message.contains("amount must be positive"),
-        message: "unexpected error: ".concat(result.error!.message)
+        error.message.contains("amount must be positive"),
+        message: "unexpected error: \(error.message)"
     )
 }
 ```

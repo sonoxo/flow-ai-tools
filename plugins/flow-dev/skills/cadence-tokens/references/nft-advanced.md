@@ -174,6 +174,18 @@ access(all) fun evolve() {
 ## Genetic Systems
 
 ### Dominance / Recessive in `createChildTrait`
+
+The breeding odds are contract-level `let` fields, not literals in the expression.
+`seed % 4` tells a reviewer nothing; `seed % recessiveChanceDivisor` tells them what the
+number governs and gives the value one place to change when the odds are retuned.
+
+```cadence
+// Set in init() — these are the breeding policy, and belong where it can be reviewed.
+access(all) let recessiveChanceDivisor: UInt64   // 4  → 1-in-4 recessive
+access(all) let mutationChanceDivisor: UInt64    // 256 → 1-in-256 mutation
+access(all) let maxMutationStep: UInt64          // 10  → mutation adds 1...10
+```
+
 ```cadence
 access(all) fun createChildTrait(
     parent1Trait: &{TraitModule.Trait},
@@ -184,15 +196,15 @@ access(all) fun createChildTrait(
     let p1 = parent1Trait.getRawValue() as? UInt64 ?? 0
     let p2 = parent2Trait.getRawValue() as? UInt64 ?? 0
 
-    // Dominant allele wins; 25% chance of recessive expression
-    let isDominantExpressed = (seed % 4) != 0  // 75% dominant
+    // Dominant allele wins; 1-in-4 chance of recessive expression.
+    let isDominantExpressed = (seed % EvolvingNFT.recessiveChanceDivisor) != 0
     let value = isDominantExpressed
         ? (p1 > p2 ? p1 : p2)    // dominant = higher value
         : (p1 < p2 ? p1 : p2)    // recessive = lower value
 
-    // Rare mutation (1 in 256)
-    let mutated = (seed % 256) == 0
-        ? value + (seed % 10) + 1  // small positive mutation
+    // Rare mutation, biased upward by at most one step.
+    let mutated = (seed % EvolvingNFT.mutationChanceDivisor) == 0
+        ? value + (seed % EvolvingNFT.maxMutationStep) + 1
         : value
 
     return <- create Trait(value: mutated, nftUUID: nftUUID)

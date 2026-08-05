@@ -38,7 +38,7 @@ Skills for developing on the Flow network:
 
 | Skill | Description |
 |-------|-------------|
-| `cadence-lang` | Cadence language fundamentals: access control, entitlements, resources, contracts, transactions, interfaces, accounts, references, capabilities, pre/post conditions, security best practices, anti-patterns, and design patterns |
+| `cadence-lang` | Cadence language fundamentals: access control, entitlements, resources, contracts, transactions, interfaces, accounts, references, capabilities, pre/post conditions, security best practices (checks-effects-interactions, trust-boundary validation, bounded loops), anti-patterns, design patterns, style and readability, and numeric precision with checked arithmetic |
 | `cadence-tokens` | NFT and FT token development: NonFungibleToken/FungibleToken interface conformance, MetadataViews integration, collection patterns, modular NFT architectures |
 | `cadence-audit` | Smart contract audit and review: security vulnerabilities, severity-rated findings, structured review format, project-wide audit workflow |
 | `cadence-scaffold` | Interactive code generation: scaffold production-ready contracts, transactions, and DeFi transactions with proper security patterns |
@@ -47,7 +47,7 @@ Skills for developing on the Flow network:
 | `flow-project-setup` | Flow project configuration: flow.json setup, FCL frontend integration, CLI workflow, deployment, debugging, gas optimization, testnet validation |
 | `flow-cli` | Flow CLI reference: full command list, account management, query blockchain (accounts/blocks/events/transactions), Cadence script recipes, MCP server setup |
 | `flow-dev-setup` | Development environment setup: Flow CLI installation, emulator, VS Code extension, testing framework, dev wallet, frontend SDKs (FCL/React), EVM tooling (Hardhat/Foundry/Remix) |
-| `flow-defi` | Flow DeFi architecture: COAs, MEV-free EVM, cross-VM atomicity, lending health factor/kink models, AMM type selection, liquidity bootstrapping benchmarks, veFLOW, Merkl, ecosystem map |
+| `flow-defi` | Flow DeFi architecture and protocol safety: COAs, MEV-free EVM, cross-VM atomicity, lending health factor/kink models, AMM type selection, liquidity bootstrapping benchmarks, veFLOW, Merkl, ecosystem map, oracle sourcing, foreign-contract assumptions, emergency stops |
 | `flow-tokenomics` | Token economics: Fisher Equation, Nash equilibrium, proven patterns (Real Yield/Buyback/veToken) with failure case studies, TGE 12-week playbook, DAO governance attack vectors, Howey Test, MiCA compliance |
 
 ## Repository Structure
@@ -62,7 +62,7 @@ plugins/
         skills/
             cadence-lang/
                 SKILL.md    # Cadence language guide
-                references/ # 14 reference files
+                references/ # 18 reference files
             cadence-tokens/
                 SKILL.md    # Token development guide
                 references/ # 2 reference files
@@ -88,8 +88,8 @@ plugins/
                 SKILL.md    # Dev environment setup guide
                 references/ # 8 reference files
             flow-defi/
-                SKILL.md    # DeFi architecture guide
-                references/ # 4 reference files
+                SKILL.md    # DeFi architecture and safety guide
+                references/ # 5 reference files
             flow-tokenomics/
                 SKILL.md    # Tokenomics guide
                 references/ # 5 reference files

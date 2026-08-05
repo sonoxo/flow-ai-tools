@@ -30,7 +30,12 @@ access(all) struct NFTReport {
 
 access(all) resource NFT {
     access(all) view fun generateReport(): NFTReport {
-        return NFTReport(id: self.id, owner: self.owner?.address ?? panic("No owner"), metadata: self.metadata)
+        return NFTReport(
+            id: self.id,
+            owner: self.owner?.address
+                ?? panic("NFT.generateReport: NFT \(self.id) is not held in an account, so it has no owner"),
+            metadata: self.metadata
+        )
     }
 }
 ```
@@ -78,6 +83,38 @@ let vaultRef = signer.storage.borrow<&Vault>(from: /storage/vault)
 vaultRef.someFunction()  // Resource stays in storage
 ```
 
+`load` moves a value out of storage and `save` puts it back;
+between them the storage slot is empty, and both operations copy the whole value.
+`borrow` takes a reference and mutates in place.
+Storage access needs an authorized account reference,
+so both forms live in a transaction's `prepare` block —
+`auth(BorrowValue) &Account` for the borrow,
+`auth(LoadValue, SaveValue) &Account` for the load-and-save it replaces.
+
+The same applies inside a container.
+Reading a struct out of an array or dictionary copies it,
+so the copy-mutate-write-back shape does the work three times
+and grows with the size of the container.
+Take a reference into the container and mutate through it:
+
+```cadence
+// ❌ Three operations, and the copy is easy to forget to write back
+var pool = self.pools[side]!
+pool.absorb(shares: shares)
+self.pools[side] = pool
+
+// ✅ Reference into the container
+let pool = &self.pools[side] as &Pool?
+    ?? panic("absorb: no pool for side \(side)")
+pool.absorb(shares: shares)
+```
+
+Related habits in the same vein:
+iterate a dictionary directly rather than over `.keys` and indexing back in
+(the linter's `replacement-hint`),
+iterate `.values` when only the values are needed,
+and pass large arrays and dictionaries as references rather than by value.
+
 ## Pattern 9: Capability Bootstrapping via Inbox
 ```cadence
 // Publisher
@@ -108,7 +145,7 @@ Add functionality without modifying original:
 access(all) resource EnhancedToken {
     access(self) let token: @Token
     access(all) let metadata: {String: String}
-    access(all) fun getID(): UInt64 { return self.token.id }
+    access(all) view fun getID(): UInt64 { return self.token.id }
 }
 ```
 
@@ -122,7 +159,8 @@ access(all) resource Collection {
         destroy old
     }
     access(Withdraw) fun withdraw(id: UInt64): @Item {
-        return <- self.items.remove(key: id) ?? panic("Item not found")
+        return <- self.items.remove(key: id)
+            ?? panic("Collection.withdraw: Item with ID \(id) not found in collection")
     }
     access(all) view fun borrowItem(id: UInt64): &Item? { return &self.items[id] }
     access(all) view fun getIDs(): [UInt64] { return self.items.keys }
@@ -139,7 +177,7 @@ access(all) resource Collection {
 ## Pattern 15: Storage Existence Check
 ```cadence
 if signer.storage.borrow<&AnyResource>(from: /storage/myResource) != nil {
-    panic("Path already in use")
+    panic("setup: /storage/myResource already holds a value — saving would overwrite it")
 }
 signer.storage.save(<-resource, to: /storage/myResource)
 ```
@@ -171,3 +209,47 @@ access(all) view fun vaultNotFoundError(): String {
 let vault = signer.storage.borrow<&Vault>(from: MyToken.vaultStoragePath)
     ?? panic(MyToken.vaultNotFoundError())
 ```
+
+## Pattern 18: Strongly-Typed Script Results
+
+A script's return type is the contract with its caller.
+Return a struct whose fields are named and typed,
+not a `{String: AnyStruct}` bag that forces every caller to guess keys and cast values.
+
+```cadence
+// ❌ Untyped bag
+access(all) fun main(id: UInt64): {String: AnyStruct} {
+    let position = Market.borrowPosition(id: id)
+    return {
+        "side": position.side,
+        "shares": position.shares,
+        "funds": position.funds,
+    }
+}
+
+// ✅ Typed result
+access(all) struct PositionView {
+    access(all) let side: Market.Side
+    access(all) let shares: UFix128
+    access(all) let funds: UFix128
+
+    init(side: Market.Side, shares: UFix128, funds: UFix128) {
+        self.side = side
+        self.shares = shares
+        self.funds = funds
+    }
+}
+
+access(all) fun main(id: UInt64): PositionView {
+    let position = Market.borrowPosition(id: id)
+    return PositionView(
+        side: position.side,
+        shares: position.shares,
+        funds: position.funds,
+    )
+}
+```
+
+The typed return survives the trip off-chain:
+an SDK decodes it into a matching struct,
+and a renamed or removed field becomes a decode error instead of a silent `nil`.

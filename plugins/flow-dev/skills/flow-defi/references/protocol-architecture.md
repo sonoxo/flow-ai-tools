@@ -16,7 +16,7 @@ transaction() {
     prepare(signer: auth(BorrowValue) &Account) {
         let coa = signer.storage.borrow<auth(EVM.Call) &EVM.CadenceOwnedAccount>(
             from: /storage/evm
-        ) ?? panic("No COA found")
+        ) ?? panic("No CadenceOwnedAccount at /storage/evm for \(signer.address)")
 
         // Call an EVM contract atomically within this Cadence transaction
         // evmContractAddress is an EVM.EVMAddress (e.g., obtained from a stored address or COA)
@@ -63,7 +63,7 @@ transaction() {
 // Borrow COA with call permission
 let coa = signer.storage.borrow<auth(EVM.Call) &EVM.CadenceOwnedAccount>(
     from: /storage/evm
-) ?? panic("COA not found")
+) ?? panic("No CadenceOwnedAccount at /storage/evm for \(signer.address)")
 
 // Encode EVM calldata (ABI encoding)
 let calldata: [UInt8] = /* ABI-encoded function call */

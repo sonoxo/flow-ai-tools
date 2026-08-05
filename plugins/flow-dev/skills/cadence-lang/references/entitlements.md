@@ -12,6 +12,12 @@ entitlement Mint
 
 Entitlement names should be a verb (what it grants) or noun (who should have it), capitalized. Entitlements share the same namespace as types and can be imported from other contracts (`C.E`).
 
+Because they share that namespace, an entitlement cannot have the same name as a type
+in the same contract: declaring `entitlement Admin` alongside `resource Admin` fails to
+compile with `cannot redeclare resource`. Name the entitlement after the operation it
+grants (`Mint`, `Update`, `Grant`) and the resource after the role that holds it
+(`Administrator`, `Minter`), and the collision cannot arise.
+
 ## Using Entitlements on Members
 
 ```cadence

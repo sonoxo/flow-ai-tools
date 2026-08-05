@@ -115,7 +115,7 @@ Test.expect(result, Test.beSucceeded())
 
 ### `Test.beFailed()`
 
-Matches a `ScriptResult` or `TransactionResult` whose status is failure. Typically followed by an assertion on `result.error!.message` to pin down which failure mode you were expecting.
+Matches a `ScriptResult` or `TransactionResult` whose status is failure. Typically followed by an assertion on the error's `message` to pin down which failure mode you were expecting — bind `result.error` once with `??` or `if let` rather than force-unwrapping it at each use.
 
 ```cadence
 let result = Test.executeScript(badSource, [])
@@ -212,8 +212,13 @@ Test.expectFailure(fun(): Void {
 ```cadence
 let result = Test.executeScript(source, [])
 Test.expect(result, Test.beFailed())
-Test.assert(result.error!.message.contains("not authorized"),
-    message: "unexpected error: ".concat(result.error!.message))
+// Bind the optional once: the assertion and its failure message must describe
+// the same error, and `?? panic` says what went wrong when there was none.
+let error = result.error ?? panic("expected the script to fail, but it succeeded")
+Test.assert(
+    error.message.contains("not authorized"),
+    message: "unexpected error: \(error.message)"
+)
 ```
 
 Match on a stable substring only. Contract error messages often embed addresses, nonces, or resource IDs that change between runs, so a full-string `assertEqual` against an error message is brittle. Picking a short, intention-revealing fragment ("not authorized", "insufficient balance") keeps the test readable and resilient.
@@ -227,7 +232,7 @@ Across all of these idioms, the rule of thumb is the same: assert on the smalles
 - **Comparing addresses as strings without normalising the `0x` prefix.** `0x01` and `01` are not equal as `String` but refer to the same `Address`. Compare `Address` values as `Address`, not as strings — if you must stringify, strip the `0x` on both sides before the compare. The same caveat applies to event field values read out of `AnyStruct` maps, which the framework returns with the canonical `0x`-prefixed form.
 - **Using `assertEqual` across types that don't implement `Equatable`.** The framework compares with `==`, so non-`Equatable` composite types (structs without an explicit conformance, resources) will not compare usefully. Assert on a scalar projection of the value instead, or write a `Test.newMatcher` that extracts the fields you care about and compares each one explicitly.
 - **Overly specific `expectFailure` substrings.** A substring like `"not authorized: 0xabcdef0123456789 attempted to withdraw 100.0"` breaks the moment the contract changes its error formatting — or worse, the moment a different caller runs the test. Match on the shortest substring that identifies the specific failure mode ("not authorized") and leave the rest out.
-- **Forgetting to unwrap `result.error`.** After `Test.expect(result, Test.beFailed())`, `result.error` is non-`nil` — but still typed as an optional. Use `result.error!.message` (or bind it with `if let err = result.error`) when building the substring assertion, otherwise the test fails with a confusing optional-dereference error rather than the matcher message you intended.
+- **Forgetting to unwrap `result.error`.** After `Test.expect(result, Test.beFailed())`, `result.error` is non-`nil` — but still typed as an optional. Bind it once (`let error = result.error ?? panic("expected a failure, got success")`, or `if let error = result.error`) and assert through the binding, otherwise the test fails with a confusing optional-dereference error rather than the matcher message you intended. Force-unwrapping it twice — once in the assertion and once in the message — is the shape to avoid.
 - **Using `Test.expectFailure` for a blockchain call.** `Test.executeScript` and `Test.executeTransaction` return a result — they do not panic from the test's perspective even when the underlying call reverts. Wrapping them in `expectFailure` makes the test pass for the wrong reason: the closure returns normally, which is itself a failure of `expectFailure`. Use `Test.expect(result, Test.beFailed())` for blockchain calls and reserve `expectFailure` for code that panics in the test process itself.
 - **Re-running the same matcher inside a loop without rebinding.** Matchers are plain values; they hold no per-call state. But if you assemble a matcher inside a loop with `and`/`or`, make sure you reset the accumulator between iterations, otherwise the conjunction grows with each pass and eventually rejects everything.
 - **Omitting the `message` on `Test.assert` for compound predicates.** A bare `Test.assert(a > 0 && b < 100 && c.contains("x"))` failure says only "assertion failed". Supply a short message that names the expectation so a CI failure is legible without opening the test file — or, better, convert the compound into a `Test.expect` with combined matchers so the matcher renders the failure for you.

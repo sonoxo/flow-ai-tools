@@ -108,8 +108,8 @@ controller.setTag("FlowToken Receiver - Public Deposit Access")
 ```cadence
 let controllers = account.capabilities.storage.getControllers(forPath: /storage/vault)
 for controller in controllers {
-    log("Cap ID: ".concat(controller.capabilityID.toString()))
-    log("Tag: ".concat(controller.tag))
+    log("Cap ID: \(controller.capabilityID)")
+    log("Tag: \(controller.tag)")
 }
 ```
 
