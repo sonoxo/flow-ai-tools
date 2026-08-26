@@ -1,3 +1,42 @@
+<div align="center">
+
+<img width="100%" src="docs/assets/sonoxo-ecosystem-orbit.svg" alt="FLOW TOOLCHAIN animated ecosystem flow" />
+
+# FLOW TOOLCHAIN
+
+### A developer request activates focused Flow skills that guide Cadence authoring, testing, auditing, and network workflows.
+
+[Start here](#start-here) · [Original project documentation](#original-project-documentation)
+
+</div>
+
+## Start here
+
+You do not need to understand the whole codebase first. Follow the illuminated path in the graphic:
+
+**01 — Describe the task** →  **02 — Select a Flow skill** →  **03 — Write Cadence or app code** →  **04 — Test and audit** →  **05 — Use Flow tooling**
+
+| What you are looking at | Plain-English meaning |
+|---|---|
+| **Input** | What the user or system supplies |
+| **Core** | The repository’s main processing loop |
+| **Guardrails** | Configuration, policy, filters, or approval boundaries |
+| **Output** | The result the system returns or deploys |
+| **Proof** | Tests, reports, previews, logs, or other visible evidence |
+
+> **Status, stated plainly:** This fork preserves Flow’s upstream plugin content and attribution. The Sonoxo layer is documentation presentation only unless an integration is explicitly implemented.
+
+<details>
+<summary><strong>Accessibility and motion</strong></summary>
+
+The hero is a native SVG with descriptive text. Animation automatically stops when your device enables **Reduce Motion**. No JavaScript, tracking code, video autoplay, or external image host is required.
+
+</details>
+
+---
+
+## Original project documentation
+
 # flow-ai-tools — Claude Code Plugin for Flow Network Development
 
 AI tools for the [Flow network](https://github.com/onflow) ecosystem. These [Claude Code](https://claude.ai/code) plugins provide domain-specific skills that help Claude Code write better Cadence and Flow code.
